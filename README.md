@@ -1,47 +1,17 @@
-# Fine-tune on Azure ML and serve it behind a Foundry agent
+# Fine-Tune on Azure
 
-> **Four repos, run in this order.** Ingestion first — the other three read its
-> output. After that they are independent and can be done in any order, or skipped.
-> 
-> 1. [Azure-Data-Ingestion](https://github.com/Auxin-io/Azure-Data-Ingestion#readme) — generates the PDFs, OCRs them with Document Intelligence, writes the training data
-> 2. [Azure-ML-AI-Agentic-Pre-Train](https://github.com/Auxin-io/Azure-ML-AI-Agentic-Pre-Train#readme) — trains a model from random weights on Azure ML, serves it, wraps it in a Foundry agent
-> 3. **Azure-ML-AI-Agentic-Fine-Tune** ← you are here — fine-tunes Qwen2.5-3B on Azure ML, serves it, wraps it in a Foundry agent
-> 4. [Azure-AI-Agentic-RAG](https://github.com/Auxin-io/Azure-AI-Agentic-RAG#readme) — retrieval over HR documents with a Foundry agent; no training at all
+This repo adapts an open-weights model to the finance documents, then puts an agent in front of it.
 
-```mermaid
-flowchart LR
-    ING["1 · Data-Ingestion<br/>PDFs → OCR → datasets<br/>(required first)"]
-    PT["2 · Agentic Pre-Train<br/>knowledge in the weights"]
-    FT["3 · Agentic Fine-Tune<br/>knowledge in adapter weights<br/>(you are here)"]
-    RAG["4 · Agentic RAG<br/>knowledge in an index"]
-
-    ING -->|"employee"| PT
-    ING -->|"finance"| FT
-    ING -->|"hr"| RAG
-
-    style ING fill:#fde8d7,stroke:#b4651a,stroke-width:2px,color:#3a1f08
-    style PT fill:#eef0f4,stroke:#9aa3b2,stroke-width:1px,color:#3a4050
-    style FT fill:#dbeafe,stroke:#2b5fc9,stroke-width:3px,color:#0b1b3a
-    style RAG fill:#eef0f4,stroke:#9aa3b2,stroke-width:1px,color:#3a4050
-    linkStyle 1 stroke:#2b5fc9,stroke-width:2.5px
-```
-
-🔵 this repo · 🟠 run this one first · ⚪ not needed here
-
-In this project we trains a LoRA adapter for `Qwen/Qwen2.5-3B-Instruct` on the **finance
-closed-book** data, serves it
-from an Azure ML managed online endpoint, and puts a Foundry agent in front of
-it so a user in Microsoft 365 Copilot can ask a finance question and get the
-answer from the fine-tuned weights.
+What it does:
+- Takes the **finance dataset** from [Azure-Data-Ingestion](https://github.com/Auxin-io/Azure-Data-Ingestion)
+- Trains a LoRA adapter for `Qwen/Qwen2.5-3B-Instruct` on Azure ML with QLoRA
+- Serves it from a managed online endpoint and wraps it in a Foundry agent
 
 ```
 Blob (finance JSONL)  ->  Azure ML training job (T4, QLoRA)  ->  Model registry  ->  Managed online endpoint
                                                                                         ^
 User -> M365 Copilot -> Bot Service -> Foundry agent (gpt-4.1-mini) -> OpenAPI tool ----+
 ```
-
-Training data comes from the
-[Azure-Data-Ingestion](https://github.com/Auxin-io/Azure-Data-Ingestion).
 
 ---
 
@@ -104,7 +74,9 @@ the hour in our case).
 
 ---
 
-## Step 1 — infrastructure
+## How To Setup
+
+### Step 1 — infrastructure
 
 ```bash
 cd terraform
@@ -144,7 +116,7 @@ eval "$(terraform -chdir=terraform output -raw agent_env)"
 
 ---
 
-## Step 2 — data
+### Step 2 — data
 
 Run the following commands to add the data configuration in ML.
 
@@ -157,7 +129,7 @@ cd ..
 
 ---
 
-## Step 3 — train
+### Step 3 — train
 
 ```bash
 cd training
@@ -184,7 +156,7 @@ Studio → job → *Outputs + logs → user_logs/std_log.txt*.
 
 ---
 
-## Step 4 — register and serve
+### Step 4 — register and serve
 
 ```bash
 az ml model create -g <ml-rg> -w <workspace> \
@@ -215,7 +187,7 @@ Q  How much do we owe Xenon Energy?
 
 ---
 
-## Step 5 — the Foundry agent
+### Step 5 — the Foundry agent
 
 ```bash
 cd ../agent
@@ -246,7 +218,7 @@ Agents → `employee-agent` → Save as new agent → Playground.
 
 ---
 
-## Step 6 — publish to Microsoft 365 Copilot
+### Step 6 — publish to Microsoft 365 Copilot
 
 In the agent click **Publish → Teams and Microsoft 365**, fill in the
 descriptions, keep the generated bot name, and finish. This creates an Azure
